@@ -1,0 +1,185 @@
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id           String   @id @default(uuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         String   @default("ADMIN")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model Lecturer {
+  id           String             @id @default(uuid())
+  name         String
+  email        String             @unique
+  department   String             @default("Computing and Informatics")
+  availability String             @default("ALL")
+  maxDailyHours Int               @default(6)
+  components   ModuleComponent[]
+  sessions     TimetableSession[]
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+}
+
+model Cohort {
+  id           String             @id @default(uuid())
+  name         String             @unique
+  programme    String
+  studentCount Int                @default(30)
+  modules      Module[]
+  sessions     TimetableSession[]
+  examinations Examination[]
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+}
+
+model Room {
+  id             String               @id @default(uuid())
+  name           String               @unique
+  building       String               @default("Block A")
+  capacity       Int
+  type           String               @default("CLASSROOM")
+  isAvailable    Boolean              @default(true)
+  sessions       TimetableSession[]
+  examAllocations ExamRoomAllocation[]
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+}
+
+model TimeSlot {
+  id        String             @id @default(uuid())
+  day       String
+  startTime String             // e.g. "09:00"
+  endTime   String             // e.g. "11:00"
+  slotOrder Int                @default(1)
+  sessions  TimetableSession[]
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+
+  @@unique([day, startTime, endTime])
+}
+
+model Module {
+  id          String             @id @default(uuid())
+  code        String             @unique
+  name        String
+  description String?
+  
+  cohorts     Cohort[]
+  
+  components  ModuleComponent[]
+  sessions    TimetableSession[]
+  examinations Examination[]
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+}
+
+model ModuleComponent {
+  id               String             @id @default(uuid())
+  type             String             // "LECTURE", "TUTORIAL", "WORKSHOP"
+  durationMinutes  Int                @default(90) // e.g. 90 for 1.5h, 60 for 1h, 120 for 2h
+  requiredRoomType String             @default("ANY") // "CLASSROOM", "COMPUTER_LAB", "LECTURE_HALL", "ANY"
+  
+  moduleId         String
+  module           Module             @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  
+  lecturerId       String
+  lecturer         Lecturer           @relation(fields: [lecturerId], references: [id], onDelete: Cascade)
+  
+  sessions         TimetableSession[]
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  @@unique([moduleId, type])
+}
+
+model TimetableSession {
+  id                String           @id @default(uuid())
+  status            String           @default("SCHEDULED")
+  sessionType       String           @default("LECTURE") // "LECTURE", "TUTORIAL", "WORKSHOP"
+  durationMinutes   Int              @default(90)
+  startTime         String?          // e.g. "09:00"
+  endTime           String?          // e.g. "10:30"
+  day               String?          // e.g. "Monday"
+  conflictNote      String?
+  selectionReason   String?
+  
+  moduleId          String
+  module            Module           @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  
+  moduleComponentId String?
+  moduleComponent   ModuleComponent? @relation(fields: [moduleComponentId], references: [id], onDelete: Cascade)
+  
+  lecturerId        String
+  lecturer          Lecturer         @relation(fields: [lecturerId], references: [id], onDelete: Cascade)
+  
+  cohortId          String
+  cohort            Cohort           @relation(fields: [cohortId], references: [id], onDelete: Cascade)
+  
+  roomId            String?
+  room              Room?            @relation(fields: [roomId], references: [id], onDelete: SetNull)
+  
+  timeSlotId        String?
+  timeSlot          TimeSlot?        @relation(fields: [timeSlotId], references: [id], onDelete: SetNull)
+  
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+}
+
+model Examination {
+  id              String               @id @default(uuid())
+  title           String?
+  studentCount    Int
+  date            String
+  startTime       String               @default("09:00")
+  duration        Int                  @default(2)
+  status          String               @default("SCHEDULED")
+  notes           String?
+  
+  moduleId        String
+  module          Module               @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  
+  cohortId        String
+  cohort          Cohort               @relation(fields: [cohortId], references: [id], onDelete: Cascade)
+  
+  allocations     ExamRoomAllocation[]
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+}
+
+model ExamRoomAllocation {
+  id                String      @id @default(uuid())
+  allocatedStudents Int
+  
+  examinationId     String
+  examination       Examination @relation(fields: [examinationId], references: [id], onDelete: Cascade)
+  
+  roomId            String
+  room              Room        @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+}
+
+model GenerationLog {
+  id                   String   @id @default(uuid())
+  generatedAt          DateTime @default(now())
+  totalSessions        Int
+  scheduledCount       Int
+  unscheduledCount     Int
+  executionTimeMs      Float
+  candidateEvaluations Int
+  rejectionsCount      Int
+  qualityScore         Float
+  unscheduledReasons   String
+  hardConstraintsRate  Float    @default(100.0)
+}
