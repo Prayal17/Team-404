@@ -113,6 +113,7 @@ model TimetableSession {
   day               String?          // e.g. "Monday"
   conflictNote      String?
   selectionReason   String?
+  combinedGroupId   String?
   
   moduleId          String
   module            Module           @relation(fields: [moduleId], references: [id], onDelete: Cascade)

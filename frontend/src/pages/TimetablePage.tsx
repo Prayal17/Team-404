@@ -112,15 +112,28 @@ export const TimetablePage: React.FC = () => {
 
     if (rowMap.size === 0) {
       return [
+        { start: '07:00', end: '08:00', intendedType: 'TUTORIAL', label: '07:00 – 08:00 (Tutorial)' },
+        { start: '07:00', end: '08:30', intendedType: 'LECTURE', label: '07:00 – 08:30 (Lecture)' },
+        { start: '07:00', end: '09:00', intendedType: 'WORKSHOP', label: '07:00 – 09:00 (Workshop)' },
+        { start: '08:00', end: '09:00', intendedType: 'TUTORIAL', label: '08:00 – 09:00 (Tutorial)' },
+        { start: '08:30', end: '10:00', intendedType: 'LECTURE', label: '08:30 – 10:00 (Lecture)' },
         { start: '09:00', end: '10:00', intendedType: 'TUTORIAL', label: '09:00 – 10:00 (Tutorial)' },
         { start: '09:00', end: '11:00', intendedType: 'WORKSHOP', label: '09:00 – 11:00 (Workshop)' },
-        { start: '09:30', end: '11:00', intendedType: 'LECTURE', label: '09:30 – 11:00 (Lecture)' },
+        { start: '10:00', end: '11:00', intendedType: 'TUTORIAL', label: '10:00 – 11:00 (Tutorial)' },
+        { start: '10:00', end: '11:30', intendedType: 'LECTURE', label: '10:00 – 11:30 (Lecture)' },
         { start: '11:00', end: '12:00', intendedType: 'TUTORIAL', label: '11:00 – 12:00 (Tutorial)' },
         { start: '11:00', end: '13:00', intendedType: 'WORKSHOP', label: '11:00 – 13:00 (Workshop)' },
-        { start: '12:00', end: '13:30', intendedType: 'LECTURE', label: '12:00 – 13:30 (Lecture)' },
+        { start: '11:30', end: '13:00', intendedType: 'LECTURE', label: '11:30 – 13:00 (Lecture)' },
+        { start: '12:00', end: '13:00', intendedType: 'TUTORIAL', label: '12:00 – 13:00 (Tutorial)' },
         { start: '13:00', end: '14:00', intendedType: 'TUTORIAL', label: '13:00 – 14:00 (Tutorial)' },
-        { start: '14:00', end: '16:00', intendedType: 'WORKSHOP', label: '14:00 – 16:00 (Workshop)' },
-        { start: '14:30', end: '16:00', intendedType: 'LECTURE', label: '14:30 – 16:00 (Lecture)' }
+        { start: '13:00', end: '14:30', intendedType: 'LECTURE', label: '13:00 – 14:30 (Lecture)' },
+        { start: '13:00', end: '15:00', intendedType: 'WORKSHOP', label: '13:00 – 15:00 (Workshop)' },
+        { start: '14:00', end: '15:00', intendedType: 'TUTORIAL', label: '14:00 – 15:00 (Tutorial)' },
+        { start: '14:30', end: '16:00', intendedType: 'LECTURE', label: '14:30 – 16:00 (Lecture)' },
+        { start: '15:00', end: '16:00', intendedType: 'TUTORIAL', label: '15:00 – 16:00 (Tutorial)' },
+        { start: '15:00', end: '17:00', intendedType: 'WORKSHOP', label: '15:00 – 17:00 (Workshop)' },
+        { start: '15:30', end: '17:00', intendedType: 'LECTURE', label: '15:30 – 17:00 (Lecture)' },
+        { start: '16:00', end: '17:00', intendedType: 'TUTORIAL', label: '16:00 – 17:00 (Tutorial)' }
       ];
     }
 
@@ -358,7 +371,13 @@ export const TimetablePage: React.FC = () => {
                                     </div>
 
                                     <div className="flex items-center justify-between gap-1 text-slate-600">
-                                      <span className="truncate">{session.cohort.name} ({session.cohort.studentCount}s)</span>
+                                      {session.combinedGroupId ? (
+                                        <span className="truncate font-medium text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded text-[10px]">
+                                          Combined: {sessions.filter(s => s.combinedGroupId === session.combinedGroupId).map(s => s.cohort.name).join(' + ')}
+                                        </span>
+                                      ) : (
+                                        <span className="truncate">{session.cohort.name} ({session.cohort.studentCount}s)</span>
+                                      )}
                                       <span className="px-1.5 py-0.5 bg-slate-100 text-slate-800 font-bold rounded text-[10px]">
                                         {session.room?.name}
                                       </span>

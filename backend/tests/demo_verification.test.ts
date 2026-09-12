@@ -98,12 +98,32 @@ async function runDemoVerification() {
   });
   const cs503Sessions = await prisma.timetableSession.findMany({
     where: { moduleId: cs503?.id },
-    include: { cohort: true, moduleComponent: true }
+    include: { cohort: true, moduleComponent: true, room: true }
   });
   const cohortNames = Array.from(new Set(cs503Sessions.map(s => s.cohort.name)));
+  const cs503Lectures = cs503Sessions.filter(s => s.sessionType === 'LECTURE');
+  const cs503Tutorials = cs503Sessions.filter(s => s.sessionType === 'TUTORIAL');
+  const cs503Workshops = cs503Sessions.filter(s => s.sessionType === 'WORKSHOP');
+
   check(
-    (cs503?.cohorts.length || 0) >= 2 && cs503Sessions.length >= 6 && cohortNames.length === 2,
-    `Shared Module CS503 scheduled separately per cohort (2 cohorts: ${cohortNames.join(', ')} -> ${cs503Sessions.length} total sessions)`
+    cs503Lectures.length === 2 &&
+    !cs503Lectures[0].combinedGroupId &&
+    !cs503Lectures[1].combinedGroupId,
+    `CS503 Lectures scheduled separately per cohort because programmes differ (${cs503?.cohorts.map(c => `${c.name}: ${c.programme}`).join(' vs ')})`
+  );
+
+  check(
+    cs503Tutorials.length === 2 &&
+    !cs503Tutorials[0].combinedGroupId &&
+    !cs503Tutorials[1].combinedGroupId,
+    'CS503 Tutorials scheduled individually per cohort'
+  );
+
+  check(
+    cs503Workshops.length === 2 &&
+    !cs503Workshops[0].combinedGroupId &&
+    !cs503Workshops[1].combinedGroupId,
+    'CS503 Workshops scheduled individually per cohort'
   );
 
   // 3. Test Conflict Detection Logic

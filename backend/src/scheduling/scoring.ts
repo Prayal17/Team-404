@@ -17,6 +17,11 @@ export interface CandidateEvaluationContext {
     name: string;
     studentCount: number;
   };
+  cohorts?: Array<{
+    id: string;
+    name: string;
+    studentCount: number;
+  }>;
   lecturer: {
     id: string;
     name: string;
@@ -50,6 +55,7 @@ export interface CandidateEvaluationContext {
     endTime: string;
     durationMinutes: number;
     slotOrder: number;
+    combinedGroupId?: string | null;
   }>;
 }
 
@@ -143,9 +149,13 @@ export class ScoringEngine {
           );
         }
 
-        if (session.cohortId === ctx.cohort.id) {
+        const matchingCohort = ctx.cohorts
+          ? ctx.cohorts.find(c => c.id === session.cohortId)
+          : (session.cohortId === ctx.cohort.id ? ctx.cohort : null);
+
+        if (matchingCohort) {
           hardViolations.push(
-            `Cohort ${ctx.cohort.name} has another session scheduled during ${ctx.timeSlot.day} ${session.startTime}–${session.endTime}.`
+            `Cohort ${matchingCohort.name} has another session scheduled during ${ctx.timeSlot.day} ${session.startTime}–${session.endTime}.`
           );
         }
       }

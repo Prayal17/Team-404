@@ -15,6 +15,9 @@ export interface SessionWithRelations {
   roomId: string | null;
   timeSlotId: string | null;
   status: string;
+  combinedGroupId?: string | null;
+  conflictNote?: string | null;
+  selectionReason?: string | null;
   module: {
     id: string;
     code: string;
@@ -67,6 +70,19 @@ export class ConflictDetector {
     const scheduled = sessions.filter(s => s.status === 'SCHEDULED' && s.roomId && (s.timeSlot || s.startTime));
     const unscheduled = sessions.filter(s => s.status === 'UNSCHEDULED' || !s.roomId || (!s.timeSlot && !s.startTime));
 
+    // Precompute total student counts for combined lecture groups
+    const combinedGroupTotals = new Map<string, number>();
+    const checkedCombinedGroups = new Set<string>();
+
+    for (const s of scheduled) {
+      if (s.combinedGroupId) {
+        combinedGroupTotals.set(
+          s.combinedGroupId,
+          (combinedGroupTotals.get(s.combinedGroupId) || 0) + s.cohort.studentCount
+        );
+      }
+    }
+
     for (const session of scheduled) {
       if (!session.room) continue;
 
@@ -87,17 +103,37 @@ export class ConflictDetector {
         });
       }
 
-      // Room Capacity
-      if (session.room.capacity < session.cohort.studentCount) {
-        capacityViolationCount++;
-        conflicts.push({
-          type: 'CAPACITY_VIOLATION',
-          severity: 'HIGH',
-          title: `Capacity Violation: ${session.room.name}`,
-          description: `Room ${session.room.name} capacity (${session.room.capacity}) is less than cohort ${session.cohort.name} (${session.cohort.studentCount} students).`,
-          involvedSessionIds: [session.id],
-          entityIds: { roomId: session.room.id, cohortId: session.cohort.id }
-        });
+      // Room Capacity (sums students for combined lecture groups)
+      if (session.combinedGroupId) {
+        if (!checkedCombinedGroups.has(session.combinedGroupId)) {
+          checkedCombinedGroups.add(session.combinedGroupId);
+          const totalGroupStudents = combinedGroupTotals.get(session.combinedGroupId) || session.cohort.studentCount;
+          if (session.room.capacity < totalGroupStudents) {
+            capacityViolationCount++;
+            const groupSessions = scheduled.filter(s => s.combinedGroupId === session.combinedGroupId);
+            const cohortNames = groupSessions.map(s => s.cohort.name).join(' + ');
+            conflicts.push({
+              type: 'CAPACITY_VIOLATION',
+              severity: 'HIGH',
+              title: `Capacity Violation: ${session.room.name}`,
+              description: `Room ${session.room.name} capacity (${session.room.capacity}) is less than combined cohorts ${cohortNames} (${totalGroupStudents} students).`,
+              involvedSessionIds: groupSessions.map(s => s.id),
+              entityIds: { roomId: session.room.id }
+            });
+          }
+        }
+      } else {
+        if (session.room.capacity < session.cohort.studentCount) {
+          capacityViolationCount++;
+          conflicts.push({
+            type: 'CAPACITY_VIOLATION',
+            severity: 'HIGH',
+            title: `Capacity Violation: ${session.room.name}`,
+            description: `Room ${session.room.name} capacity (${session.room.capacity}) is less than cohort ${session.cohort.name} (${session.cohort.studentCount} students).`,
+            involvedSessionIds: [session.id],
+            entityIds: { roomId: session.room.id, cohortId: session.cohort.id }
+          });
+        }
       }
 
       // Lecturer Availability
@@ -148,9 +184,14 @@ export class ConflictDetector {
         if (!isOverlapping) continue;
 
         const timeLabel = `${day1} (${start1}–${end1} vs ${start2}–${end2})`;
+        const isCombinedPair = Boolean(
+          s1.combinedGroupId &&
+          s2.combinedGroupId &&
+          s1.combinedGroupId === s2.combinedGroupId
+        );
 
-        // Room Clash
-        if (s1.roomId && s2.roomId && s1.roomId === s2.roomId) {
+        // Room Clash (Skip for intentionally combined lecture sessions)
+        if (!isCombinedPair && s1.roomId && s2.roomId && s1.roomId === s2.roomId) {
           roomConflictCount++;
           conflicts.push({
             type: 'ROOM_CLASH',
@@ -162,14 +203,14 @@ export class ConflictDetector {
           });
         }
 
-        // Lecturer Clash
-        if (s1.lecturerId === s2.lecturerId) {
+        // Lecturer Clash (Skip for intentionally combined lecture sessions)
+        if (!isCombinedPair && s1.lecturerId === s2.lecturerId) {
           lecturerConflictCount++;
           conflicts.push({
             type: 'LECTURER_CLASH',
             severity: 'HIGH',
             title: `Lecturer Clash: ${s1.lecturer.name}`,
-            description: `Lecturer ${s1.lecturer.name} is assigned to overlapping sessions on ${timeLabel} ("${s1.module.code} ${s1.sessionType}" and "${s2.module.code} ${s2.sessionType}").`,
+            description: `Lecturer ${s1.lecturer.name} is assigned to overlapping sessions on ${timeLabel} ("${s1.module.code} ${s1.sessionType}" and "${s2.module.code} ${s2.sessionType}".`,
             involvedSessionIds: [s1.id, s2.id],
             entityIds: { lecturerId: s1.lecturerId }
           });

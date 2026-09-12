@@ -173,23 +173,36 @@ async function seed() {
   ]);
   console.log(`✓ Seeded ${rooms.length} Rooms`);
 
-  // 5. Seed Type-Specific Time Slots across Sunday - Friday (6-day academic week)
+  // 5. Seed Type-Specific Time Slots across Sunday - Friday (7:00 AM – 5:00 PM operating hours)
   const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
   const slotDefinitions = [
-    // WORKSHOP anchors (120 min)
-    { startTime: '09:00', endTime: '11:00', slotOrder: 1, intendedType: 'WORKSHOP' },
-    { startTime: '11:00', endTime: '13:00', slotOrder: 2, intendedType: 'WORKSHOP' },
-    { startTime: '14:00', endTime: '16:00', slotOrder: 3, intendedType: 'WORKSHOP' },
+    // WORKSHOP anchors (120 min = 2.0h) - 07:00 to 17:00
+    { startTime: '07:00', endTime: '09:00', slotOrder: 1, intendedType: 'WORKSHOP' },
+    { startTime: '09:00', endTime: '11:00', slotOrder: 2, intendedType: 'WORKSHOP' },
+    { startTime: '11:00', endTime: '13:00', slotOrder: 3, intendedType: 'WORKSHOP' },
+    { startTime: '13:00', endTime: '15:00', slotOrder: 4, intendedType: 'WORKSHOP' },
+    { startTime: '15:00', endTime: '17:00', slotOrder: 5, intendedType: 'WORKSHOP' },
 
-    // LECTURE anchors (90 min)
-    { startTime: '09:30', endTime: '11:00', slotOrder: 1, intendedType: 'LECTURE' },
-    { startTime: '12:00', endTime: '13:30', slotOrder: 2, intendedType: 'LECTURE' },
-    { startTime: '14:30', endTime: '16:00', slotOrder: 3, intendedType: 'LECTURE' },
+    // LECTURE anchors (90 min = 1.5h) - 07:00 to 17:00
+    { startTime: '07:00', endTime: '08:30', slotOrder: 1, intendedType: 'LECTURE' },
+    { startTime: '08:30', endTime: '10:00', slotOrder: 2, intendedType: 'LECTURE' },
+    { startTime: '10:00', endTime: '11:30', slotOrder: 3, intendedType: 'LECTURE' },
+    { startTime: '11:30', endTime: '13:00', slotOrder: 4, intendedType: 'LECTURE' },
+    { startTime: '13:00', endTime: '14:30', slotOrder: 5, intendedType: 'LECTURE' },
+    { startTime: '14:30', endTime: '16:00', slotOrder: 6, intendedType: 'LECTURE' },
+    { startTime: '15:30', endTime: '17:00', slotOrder: 7, intendedType: 'LECTURE' },
 
-    // TUTORIAL anchors (60 min)
-    { startTime: '09:00', endTime: '10:00', slotOrder: 1, intendedType: 'TUTORIAL' },
-    { startTime: '11:00', endTime: '12:00', slotOrder: 2, intendedType: 'TUTORIAL' },
-    { startTime: '13:00', endTime: '14:00', slotOrder: 3, intendedType: 'TUTORIAL' }
+    // TUTORIAL anchors (60 min = 1.0h) - 07:00 to 17:00
+    { startTime: '07:00', endTime: '08:00', slotOrder: 1, intendedType: 'TUTORIAL' },
+    { startTime: '08:00', endTime: '09:00', slotOrder: 2, intendedType: 'TUTORIAL' },
+    { startTime: '09:00', endTime: '10:00', slotOrder: 3, intendedType: 'TUTORIAL' },
+    { startTime: '10:00', endTime: '11:00', slotOrder: 4, intendedType: 'TUTORIAL' },
+    { startTime: '11:00', endTime: '12:00', slotOrder: 5, intendedType: 'TUTORIAL' },
+    { startTime: '12:00', endTime: '13:00', slotOrder: 6, intendedType: 'TUTORIAL' },
+    { startTime: '13:00', endTime: '14:00', slotOrder: 7, intendedType: 'TUTORIAL' },
+    { startTime: '14:00', endTime: '15:00', slotOrder: 8, intendedType: 'TUTORIAL' },
+    { startTime: '15:00', endTime: '16:00', slotOrder: 9, intendedType: 'TUTORIAL' },
+    { startTime: '16:00', endTime: '17:00', slotOrder: 10, intendedType: 'TUTORIAL' }
   ];
 
   const timeSlotsData = [];

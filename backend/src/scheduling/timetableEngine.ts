@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import { prisma } from '../config/prisma.js';
 import { ScoringEngine, CandidateEvaluationContext } from './scoring.js';
 import { ConflictDetector, SessionWithRelations } from './conflictDetector.js';
@@ -15,9 +16,11 @@ interface ComponentSchedulingRequirement {
   lecturerId: string;
   lecturerName: string;
   lecturerAvailability: string;
-  cohortId: string;
-  cohortName: string;
-  cohortStudentCount: number;
+  cohorts: Array<{
+    id: string;
+    name: string;
+    studentCount: number;
+  }>;
 }
 
 export class TimetableEngine {
@@ -45,22 +48,57 @@ export class TimetableEngine {
     const requirements: ComponentSchedulingRequirement[] = [];
     for (const mod of modules) {
       for (const comp of mod.components) {
-        for (const cohort of mod.cohorts) {
-          requirements.push({
-            componentId: comp.id,
-            moduleId: mod.id,
-            moduleCode: mod.code,
-            moduleName: mod.name,
-            sessionType: comp.type as SessionType,
-            durationMinutes: comp.durationMinutes || 90,
-            requiredRoomType: comp.requiredRoomType || 'ANY',
-            lecturerId: comp.lecturer.id,
-            lecturerName: comp.lecturer.name,
-            lecturerAvailability: comp.lecturer.availability,
-            cohortId: cohort.id,
-            cohortName: cohort.name,
-            cohortStudentCount: cohort.studentCount
-          });
+        if (comp.type === 'LECTURE') {
+          // Group cohorts taking this module by academic programme
+          const programmeMap = new Map<string, Array<{ id: string; name: string; studentCount: number }>>();
+          for (const cohort of mod.cohorts) {
+            const prog = cohort.programme || 'DEFAULT';
+            if (!programmeMap.has(prog)) {
+              programmeMap.set(prog, []);
+            }
+            programmeMap.get(prog)!.push({
+              id: cohort.id,
+              name: cohort.name,
+              studentCount: cohort.studentCount
+            });
+          }
+
+          for (const [_, cohortList] of programmeMap) {
+            requirements.push({
+              componentId: comp.id,
+              moduleId: mod.id,
+              moduleCode: mod.code,
+              moduleName: mod.name,
+              sessionType: comp.type as SessionType,
+              durationMinutes: comp.durationMinutes || 90,
+              requiredRoomType: comp.requiredRoomType || 'ANY',
+              lecturerId: comp.lecturer.id,
+              lecturerName: comp.lecturer.name,
+              lecturerAvailability: comp.lecturer.availability,
+              cohorts: cohortList
+            });
+          }
+        } else {
+          // TUTORIAL and WORKSHOP components remain scheduled per cohort
+          for (const cohort of mod.cohorts) {
+            requirements.push({
+              componentId: comp.id,
+              moduleId: mod.id,
+              moduleCode: mod.code,
+              moduleName: mod.name,
+              sessionType: comp.type as SessionType,
+              durationMinutes: comp.durationMinutes || 90,
+              requiredRoomType: comp.requiredRoomType || 'ANY',
+              lecturerId: comp.lecturer.id,
+              lecturerName: comp.lecturer.name,
+              lecturerAvailability: comp.lecturer.availability,
+              cohorts: [{
+                id: cohort.id,
+                name: cohort.name,
+                studentCount: cohort.studentCount
+              }]
+            });
+          }
         }
       }
     }
@@ -75,8 +113,10 @@ export class TimetableEngine {
         return b.durationMinutes - a.durationMinutes;
       }
 
-      if (b.cohortStudentCount !== a.cohortStudentCount) {
-        return b.cohortStudentCount - a.cohortStudentCount;
+      const aTotalStudents = a.cohorts.reduce((sum, c) => sum + c.studentCount, 0);
+      const bTotalStudents = b.cohorts.reduce((sum, c) => sum + c.studentCount, 0);
+      if (bTotalStudents !== aTotalStudents) {
+        return bTotalStudents - aTotalStudents;
       }
 
       let aAvailCount = 6;
@@ -117,6 +157,7 @@ export class TimetableEngine {
       slotOrder: number;
       selectionReason: string;
       softScore: number;
+      combinedGroupId?: string | null;
     }
 
     const scheduledSessions: PlacedSession[] = [];
@@ -130,7 +171,22 @@ export class TimetableEngine {
       reason: string;
     }> = [];
 
-    for (const req of requirements) {
+    function evaluateRequirement(
+      r: ComponentSchedulingRequirement,
+      currentSchedule: PlacedSession[]
+    ): {
+      bestCandidate: {
+        roomId: string;
+        timeSlotId: string;
+        day: string;
+        startTime: string;
+        endTime: string;
+        slotOrder: number;
+        score: number;
+        reasons: string[];
+      } | null;
+      failureReasons: Set<string>;
+    } {
       let bestCandidate: {
         roomId: string;
         timeSlotId: string;
@@ -141,12 +197,14 @@ export class TimetableEngine {
         score: number;
         reasons: string[];
       } | null = null;
-
       let bestScore = -Infinity;
       const failureReasons = new Set<string>();
 
+      const totalStudentCount = r.cohorts.reduce((sum, c) => sum + c.studentCount, 0);
+      const combinedCohortName = r.cohorts.map(c => c.name).join(' + ');
+
       const candidateSlots = timeSlots.filter(
-        s => s.intendedType === req.sessionType || s.intendedType === 'ANY' || !s.intendedType
+        s => s.intendedType === r.sessionType || s.intendedType === 'ANY' || !s.intendedType
       );
 
       for (const slot of candidateSlots) {
@@ -155,24 +213,25 @@ export class TimetableEngine {
 
           const evalContext: CandidateEvaluationContext = {
             component: {
-              id: req.componentId,
-              type: req.sessionType,
-              durationMinutes: req.durationMinutes,
-              requiredRoomType: req.requiredRoomType
+              id: r.componentId,
+              type: r.sessionType,
+              durationMinutes: r.durationMinutes,
+              requiredRoomType: r.requiredRoomType
             },
             module: {
-              code: req.moduleCode,
-              name: req.moduleName
+              code: r.moduleCode,
+              name: r.moduleName
             },
             cohort: {
-              id: req.cohortId,
-              name: req.cohortName,
-              studentCount: req.cohortStudentCount
+              id: r.cohorts.length === 1 ? r.cohorts[0].id : r.cohorts.map(c => c.id).join('_'),
+              name: combinedCohortName,
+              studentCount: totalStudentCount
             },
+            cohorts: r.cohorts,
             lecturer: {
-              id: req.lecturerId,
-              name: req.lecturerName,
-              availability: req.lecturerAvailability
+              id: r.lecturerId,
+              name: r.lecturerName,
+              availability: r.lecturerAvailability
             },
             room: {
               id: room.id,
@@ -188,7 +247,7 @@ export class TimetableEngine {
               endTime: slot.endTime,
               slotOrder: slot.slotOrder
             },
-            currentSchedule: scheduledSessions
+            currentSchedule
           };
 
           const result = ScoringEngine.evaluateCandidate(evalContext);
@@ -196,7 +255,7 @@ export class TimetableEngine {
           if (!result.isValid) {
             rejectionsCount++;
             for (const v of result.hardViolations) {
-              if (v.includes('capacity')) {
+              if (v.includes('capacity') || v.includes('insufficient')) {
                 rejectionsByConstraint.capacityViolation++;
                 failureReasons.add('No room with sufficient capacity available');
               } else if (v.includes('occupied') || v.includes('Room')) {
@@ -205,12 +264,12 @@ export class TimetableEngine {
                 rejectionsByConstraint.lecturerClash++;
               } else if (v.includes('not available')) {
                 rejectionsByConstraint.lecturerUnavailable++;
-                failureReasons.add(`Lecturer ${req.lecturerName} availability constraint`);
+                failureReasons.add(`Lecturer ${r.lecturerName} availability constraint`);
               } else if (v.includes('Cohort') && v.includes('another session')) {
                 rejectionsByConstraint.cohortClash++;
               } else if (v.includes('Computer Lab') || v.includes('Lecture Hall')) {
                 rejectionsByConstraint.roomTypeMismatch++;
-                failureReasons.add(`Requires ${req.requiredRoomType} which was unavailable`);
+                failureReasons.add(`Requires ${r.requiredRoomType} which was unavailable`);
               } else if (v.includes('maintenance')) {
                 rejectionsByConstraint.roomUnavailable++;
               }
@@ -234,29 +293,82 @@ export class TimetableEngine {
         }
       }
 
+      return { bestCandidate, failureReasons };
+    }
+
+    for (const req of requirements) {
+      const { bestCandidate, failureReasons } = evaluateRequirement(req, scheduledSessions);
+
       if (bestCandidate) {
-        scheduledSessions.push({
-          moduleId: req.moduleId,
-          moduleComponentId: req.componentId,
-          sessionType: req.sessionType,
-          durationMinutes: req.durationMinutes,
-          lecturerId: req.lecturerId,
-          cohortId: req.cohortId,
-          roomId: bestCandidate.roomId,
-          timeSlotId: bestCandidate.timeSlotId,
-          day: bestCandidate.day,
-          startTime: bestCandidate.startTime,
-          endTime: bestCandidate.endTime,
-          slotOrder: bestCandidate.slotOrder,
-          selectionReason: bestCandidate.reasons.join(' • '),
-          softScore: bestCandidate.score
-        });
+        const isCombined = req.cohorts.length > 1;
+        const combinedGroupId = isCombined ? crypto.randomUUID() : null;
+        const reason = isCombined
+          ? `Combined lecture for ${req.cohorts.map(c => c.name).join(' + ')} (${req.cohorts.reduce((s, c) => s + c.studentCount, 0)} students) • ${bestCandidate.reasons.join(' • ')}`
+          : bestCandidate.reasons.join(' • ');
+
+        for (const cohort of req.cohorts) {
+          scheduledSessions.push({
+            moduleId: req.moduleId,
+            moduleComponentId: req.componentId,
+            sessionType: req.sessionType,
+            durationMinutes: req.durationMinutes,
+            lecturerId: req.lecturerId,
+            cohortId: cohort.id,
+            roomId: bestCandidate.roomId,
+            timeSlotId: bestCandidate.timeSlotId,
+            day: bestCandidate.day,
+            startTime: bestCandidate.startTime,
+            endTime: bestCandidate.endTime,
+            slotOrder: bestCandidate.slotOrder,
+            selectionReason: reason,
+            softScore: bestCandidate.score,
+            combinedGroupId
+          });
+        }
+      } else if (req.cohorts.length > 1) {
+        // Fallback: If no single room fits combined student count, schedule each cohort individually
+        for (const cohort of req.cohorts) {
+          const singleReq: ComponentSchedulingRequirement = {
+            ...req,
+            cohorts: [cohort]
+          };
+          const singleResult = evaluateRequirement(singleReq, scheduledSessions);
+          if (singleResult.bestCandidate) {
+            scheduledSessions.push({
+              moduleId: singleReq.moduleId,
+              moduleComponentId: singleReq.componentId,
+              sessionType: singleReq.sessionType,
+              durationMinutes: singleReq.durationMinutes,
+              lecturerId: singleReq.lecturerId,
+              cohortId: cohort.id,
+              roomId: singleResult.bestCandidate.roomId,
+              timeSlotId: singleResult.bestCandidate.timeSlotId,
+              day: singleResult.bestCandidate.day,
+              startTime: singleResult.bestCandidate.startTime,
+              endTime: singleResult.bestCandidate.endTime,
+              slotOrder: singleResult.bestCandidate.slotOrder,
+              selectionReason: `Fallback individual lecture • ${singleResult.bestCandidate.reasons.join(' • ')}`,
+              softScore: singleResult.bestCandidate.score,
+              combinedGroupId: null
+            });
+          } else {
+            unscheduledItems.push({
+              moduleCode: singleReq.moduleCode,
+              moduleName: singleReq.moduleName,
+              sessionType: singleReq.sessionType,
+              cohortName: cohort.name,
+              lecturerName: singleReq.lecturerName,
+              durationMinutes: singleReq.durationMinutes,
+              reason: Array.from(singleResult.failureReasons).join('; ') || 'No conflict-free slot/venue found'
+            });
+          }
+        }
       } else {
         unscheduledItems.push({
           moduleCode: req.moduleCode,
           moduleName: req.moduleName,
           sessionType: req.sessionType,
-          cohortName: req.cohortName,
+          cohortName: req.cohorts[0].name,
           lecturerName: req.lecturerName,
           durationMinutes: req.durationMinutes,
           reason: Array.from(failureReasons).join('; ') || 'No conflict-free slot/venue found'
@@ -277,24 +389,26 @@ export class TimetableEngine {
       roomId: s.roomId,
       timeSlotId: s.timeSlotId,
       status: 'SCHEDULED',
-      selectionReason: s.selectionReason
+      selectionReason: s.selectionReason,
+      combinedGroupId: s.combinedGroupId || null
     }));
 
     const unscheduledData = unscheduledItems.map(u => {
-      const req = requirements.find(
-        r => r.moduleCode === u.moduleCode && r.sessionType === u.sessionType && r.cohortName === u.cohortName
-      )!;
+      const mod = modules.find(m => m.code === u.moduleCode)!;
+      const comp = mod.components.find(c => c.type === u.sessionType);
+      const cohort = mod.cohorts.find(c => c.name === u.cohortName)!;
       return {
-        moduleId: req.moduleId,
-        moduleComponentId: req.componentId || null,
-        sessionType: req.sessionType,
-        durationMinutes: req.durationMinutes,
-        lecturerId: req.lecturerId,
-        cohortId: req.cohortId,
+        moduleId: mod.id,
+        moduleComponentId: comp?.id || null,
+        sessionType: u.sessionType,
+        durationMinutes: u.durationMinutes,
+        lecturerId: comp?.lecturerId || mod.components[0]?.lecturerId,
+        cohortId: cohort.id,
         roomId: null,
         timeSlotId: null,
         status: 'UNSCHEDULED',
-        conflictNote: u.reason
+        conflictNote: u.reason,
+        combinedGroupId: null
       };
     });
 

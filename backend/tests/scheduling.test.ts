@@ -583,6 +583,119 @@ const mockSlotMon11 = { id: 'slot-2', day: 'Monday', startTime: '11:00', endTime
   );
 }
 
+// TEST 15: Combined Lecture Scheduling Across Cohorts with Same Programme
+{
+  const moduleShared = { id: 'm-shared', code: 'CS503', name: 'Software Engineering' };
+  const mockCohortA = { id: 'coh-a', name: 'BIT 2A', studentCount: 40 };
+  const mockCohortB = { id: 'coh-b', name: 'BIT 2B', studentCount: 30 };
+  const mockLargeRoom = { id: 'r-large', name: 'Room 101', capacity: 75, type: 'CLASSROOM', isAvailable: true };
+  const mockSmallRoom = { id: 'r-small', name: 'Room 102', capacity: 50, type: 'CLASSROOM', isAvailable: true };
+
+  const combinedGroupId = 'group-cs503-lec';
+
+  const sLectureA: SessionWithRelations = {
+    id: 's-comb-a',
+    moduleId: moduleShared.id,
+    sessionType: 'LECTURE',
+    durationMinutes: 90,
+    startTime: '09:30',
+    endTime: '11:00',
+    day: 'Monday',
+    lecturerId: mockLecturerJohn.id,
+    cohortId: mockCohortA.id,
+    roomId: mockLargeRoom.id,
+    timeSlotId: mockSlotMon09.id,
+    status: 'SCHEDULED',
+    combinedGroupId,
+    module: moduleShared,
+    lecturer: mockLecturerJohn,
+    cohort: mockCohortA,
+    room: mockLargeRoom,
+    timeSlot: mockSlotMon09
+  };
+
+  const sLectureB: SessionWithRelations = {
+    id: 's-comb-b',
+    moduleId: moduleShared.id,
+    sessionType: 'LECTURE',
+    durationMinutes: 90,
+    startTime: '09:30',
+    endTime: '11:00',
+    day: 'Monday',
+    lecturerId: mockLecturerJohn.id,
+    cohortId: mockCohortB.id,
+    roomId: mockLargeRoom.id,
+    timeSlotId: mockSlotMon09.id,
+    status: 'SCHEDULED',
+    combinedGroupId,
+    module: moduleShared,
+    lecturer: mockLecturerJohn,
+    cohort: mockCohortB,
+    room: mockLargeRoom,
+    timeSlot: mockSlotMon09
+  };
+
+  // Tutorials are scheduled separately
+  const sTutorialA: SessionWithRelations = {
+    id: 's-tut-a',
+    moduleId: moduleShared.id,
+    sessionType: 'TUTORIAL',
+    durationMinutes: 60,
+    startTime: '11:00',
+    endTime: '12:00',
+    day: 'Monday',
+    lecturerId: mockLecturerRoy.id,
+    cohortId: mockCohortA.id,
+    roomId: mockSmallRoom.id,
+    timeSlotId: mockSlotMon11.id,
+    status: 'SCHEDULED',
+    module: moduleShared,
+    lecturer: mockLecturerRoy,
+    cohort: mockCohortA,
+    room: mockSmallRoom,
+    timeSlot: mockSlotMon11
+  };
+
+  const sTutorialB: SessionWithRelations = {
+    id: 's-tut-b',
+    moduleId: moduleShared.id,
+    sessionType: 'TUTORIAL',
+    durationMinutes: 60,
+    startTime: '13:00',
+    endTime: '14:00',
+    day: 'Monday',
+    lecturerId: mockLecturerRoy.id,
+    cohortId: mockCohortB.id,
+    roomId: mockSmallRoom.id,
+    timeSlotId: { id: 'slot-mon13', day: 'Monday', startTime: '13:00', endTime: '14:00', slotOrder: 3 } as any,
+    status: 'SCHEDULED',
+    module: moduleShared,
+    lecturer: mockLecturerRoy,
+    cohort: mockCohortB,
+    room: mockSmallRoom,
+    timeSlot: { id: 'slot-mon13', day: 'Monday', startTime: '13:00', endTime: '14:00', slotOrder: 3 } as any
+  };
+
+  // 1. Valid combined lecture in large room (75 cap >= 40+30=70) -> 0 conflicts
+  const validReport = ConflictDetector.validateTimetable([sLectureA, sLectureB, sTutorialA, sTutorialB]);
+  assert(
+    validReport.isValid && validReport.conflictCount === 0,
+    'Test 15a: Combined Lecture Valid (0 Clashes for co-located lecture with shared combinedGroupId)',
+    `Expected 0 conflicts, got ${validReport.conflictCount}`
+  );
+
+  // 2. Capacity violation on combined lecture if room capacity is less than combined students (50 < 40+30=70)
+  const sLectureAInSmall = { ...sLectureA, roomId: mockSmallRoom.id, room: mockSmallRoom };
+  const sLectureBInSmall = { ...sLectureB, roomId: mockSmallRoom.id, room: mockSmallRoom };
+  const invalidCapReport = ConflictDetector.validateTimetable([sLectureAInSmall, sLectureBInSmall]);
+  const hasCapViolation = invalidCapReport.conflicts.some(c => c.type === 'CAPACITY_VIOLATION');
+  assert(
+    hasCapViolation && invalidCapReport.capacityViolationCount === 1,
+    'Test 15b: Capacity Checked Against Combined Count (70 students in 50-cap room correctly flagged)',
+    `Expected 1 capacity violation, got ${invalidCapReport.capacityViolationCount}`
+  );
+}
+
 console.log(`\n================================================================`);
 console.log(`  RESULTS: ${passedTests}/${totalTests} TESTS PASSED  `);
 console.log(`================================================================\n`);

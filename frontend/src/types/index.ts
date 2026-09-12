@@ -78,6 +78,7 @@ export interface TimetableSession {
   day?: string | null;
   conflictNote?: string | null;
   selectionReason?: string | null;
+  combinedGroupId?: string | null;
   moduleId: string;
   moduleComponentId?: string | null;
   lecturerId: string;
