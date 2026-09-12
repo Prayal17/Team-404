@@ -31,8 +31,12 @@ export const LoginPage: React.FC = () => {
     <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4">
       <div className="max-w-md w-full bg-slate-900 border border-slate-800 rounded-2xl p-8 shadow-2xl text-white space-y-6">
         <div className="text-center space-y-2">
-          <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-indigo-500 to-violet-600 flex items-center justify-center mx-auto shadow-lg shadow-indigo-500/30">
-            <GraduationCap className="w-6 h-6 text-white" />
+          <div className="w-14 h-14 rounded-2xl bg-white p-1.5 flex items-center justify-center mx-auto shadow-xl shadow-indigo-500/30 border border-slate-700 overflow-hidden">
+            <img
+              src="/college-crest.png"
+              alt="Islington College Logo"
+              className="w-full h-full object-contain"
+            />
           </div>
           <h2 className="text-2xl font-black tracking-tight">Intelligent Academic Planner</h2>
           <p className="text-xs text-slate-400">Automated Timetable & Exam Constraint Solver</p>

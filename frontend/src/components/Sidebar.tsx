@@ -36,8 +36,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ conflictCount = 0 }) => {
     <aside className="w-64 bg-slate-900 text-slate-300 flex flex-col shrink-0 border-r border-slate-800 select-none">
       {/* Brand Header */}
       <div className="h-16 flex items-center px-6 gap-3 border-b border-slate-800 bg-slate-950/50">
-        <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-white shadow-lg shadow-indigo-500/30 font-bold text-lg tracking-wider">
-          <GraduationCap className="w-5 h-5 text-white" />
+        <div className="w-10 h-10 rounded-xl bg-white p-1 flex items-center justify-center shadow-lg shadow-indigo-500/20 shrink-0 border border-slate-700/50 overflow-hidden">
+          <img
+            src="/college-crest.png"
+            alt="Islington College Logo"
+            className="w-full h-full object-contain"
+          />
         </div>
         <div>
           <div className="font-bold text-white tracking-tight flex items-center gap-1.5 text-base">
