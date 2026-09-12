@@ -45,10 +45,18 @@ export const DAY_ORDER_MAP: Record<string, number> = {
 
 export const DEFAULT_ACADEMIC_DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
 
-export function sortTimeSlots<T extends { day: string; slotOrder?: number }>(slots: T[]): T[] {
+export function sortTimeSlots<T extends { day: string; startTime?: string; endTime?: string; slotOrder?: number }>(slots: T[]): T[] {
   return [...slots].sort((a, b) => {
     const dayDiff = (DAY_ORDER_MAP[a.day] ?? 99) - (DAY_ORDER_MAP[b.day] ?? 99);
     if (dayDiff !== 0) return dayDiff;
+    if (a.startTime && b.startTime) {
+      const timeDiff = a.startTime.localeCompare(b.startTime);
+      if (timeDiff !== 0) return timeDiff;
+    }
+    if (a.endTime && b.endTime) {
+      const endDiff = a.endTime.localeCompare(b.endTime);
+      if (endDiff !== 0) return endDiff;
+    }
     return (a.slotOrder ?? 0) - (b.slotOrder ?? 0);
   });
 }

@@ -173,12 +173,23 @@ async function seed() {
   ]);
   console.log(`✓ Seeded ${rooms.length} Rooms`);
 
-  // 5. Seed Time Slots across Sunday - Friday (6-day academic week)
+  // 5. Seed Type-Specific Time Slots across Sunday - Friday (6-day academic week)
   const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
   const slotDefinitions = [
-    { startTime: '09:00', endTime: '11:00', slotOrder: 1 },
-    { startTime: '11:00', endTime: '13:00', slotOrder: 2 },
-    { startTime: '14:00', endTime: '16:00', slotOrder: 3 }
+    // WORKSHOP anchors (120 min)
+    { startTime: '09:00', endTime: '11:00', slotOrder: 1, intendedType: 'WORKSHOP' },
+    { startTime: '11:00', endTime: '13:00', slotOrder: 2, intendedType: 'WORKSHOP' },
+    { startTime: '14:00', endTime: '16:00', slotOrder: 3, intendedType: 'WORKSHOP' },
+
+    // LECTURE anchors (90 min)
+    { startTime: '09:30', endTime: '11:00', slotOrder: 1, intendedType: 'LECTURE' },
+    { startTime: '12:00', endTime: '13:30', slotOrder: 2, intendedType: 'LECTURE' },
+    { startTime: '14:30', endTime: '16:00', slotOrder: 3, intendedType: 'LECTURE' },
+
+    // TUTORIAL anchors (60 min)
+    { startTime: '09:00', endTime: '10:00', slotOrder: 1, intendedType: 'TUTORIAL' },
+    { startTime: '11:00', endTime: '12:00', slotOrder: 2, intendedType: 'TUTORIAL' },
+    { startTime: '13:00', endTime: '14:00', slotOrder: 3, intendedType: 'TUTORIAL' }
   ];
 
   const timeSlotsData = [];
@@ -188,15 +199,17 @@ async function seed() {
         day,
         startTime: slot.startTime,
         endTime: slot.endTime,
-        slotOrder: slot.slotOrder
+        slotOrder: slot.slotOrder,
+        intendedType: slot.intendedType
       });
     }
   }
 
-  const timeSlots = await prisma.$transaction(
-    timeSlotsData.map(d => prisma.timeSlot.create({ data: d }))
-  );
-  console.log(`✓ Seeded ${timeSlots.length} Time Slots`);
+  await prisma.timeSlot.createMany({
+    data: timeSlotsData
+  });
+  const timeSlots = await prisma.timeSlot.findMany();
+  console.log(`✓ Seeded ${timeSlots.length} Type-Specific Time Slots`);
 
   // 6. Seed Modules with Multi-Component Teaching Structures (Different Lecturers per Component)
   const modules = await prisma.$transaction([

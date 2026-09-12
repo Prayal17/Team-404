@@ -56,16 +56,17 @@ model Room {
 }
 
 model TimeSlot {
-  id        String             @id @default(uuid())
-  day       String
-  startTime String             // e.g. "09:00"
-  endTime   String             // e.g. "11:00"
-  slotOrder Int                @default(1)
-  sessions  TimetableSession[]
-  createdAt DateTime           @default(now())
-  updatedAt DateTime           @updatedAt
+  id           String             @id @default(uuid())
+  day          String
+  startTime    String             // e.g. "09:00"
+  endTime      String             // e.g. "11:00"
+  slotOrder    Int                @default(1)
+  intendedType String             @default("ANY") // "LECTURE", "TUTORIAL", "WORKSHOP", "ANY"
+  sessions     TimetableSession[]
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
 
-  @@unique([day, startTime, endTime])
+  @@unique([day, startTime, endTime, intendedType])
 }
 
 model Module {

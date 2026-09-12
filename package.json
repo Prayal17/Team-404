@@ -1,0 +1,20 @@
+{
+  "name": "intelligent-academic-planner",
+  "version": "1.0.0",
+  "description": "Intelligent Academic Planning & Resource Optimization System",
+  "private": true,
+  "scripts": {
+    "install:all": "npm install && npm --prefix backend install && npm --prefix frontend install",
+    "db:push": "npm --prefix backend run db:push",
+    "db:seed": "npm --prefix backend run db:seed",
+    "backend:dev": "npm --prefix backend run dev",
+    "frontend:dev": "npm --prefix frontend run dev",
+    "dev": "concurrently -k \"npm run backend:dev\" \"npm run frontend:dev\"",
+    "build": "npm --prefix backend run build && npm --prefix frontend run build",
+    "test:backend": "npm --prefix backend test"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.2",
+    "concurrently": "^9.1.0"
+  }
+}
