@@ -1,181 +1,113 @@
-﻿# Intelligent Academic Planner (IAP)
-> **Intelligent Academic Planning & Resource Optimization System**  
-> *24-Hour Hackathon Full Working Prototype*
+Intelligent Academic Planner (IAP)
 
----
+Team 404 — Intelligent Academic Planning (Automating Academic Scheduling & Resource Allocation)
 
-## 🌟 Executive Summary
+What this actually is
 
-**Intelligent Academic Planner (IAP)** is a constraint-based academic scheduling and resource optimization platform designed to replace manual, error-prone spreadsheet scheduling. It automates timetable generation, performs real-time conflict detection with smart alternative suggestions, and coordinates examination room allocation.
+Islington's RTE department currently builds timetables and exam seating by hand in spreadsheets. That's slow and it's easy to accidentally double-book a room or a lecturer. IAP is our attempt at fixing that: you give it your modules, lecturers, cohorts and rooms, hit "Generate Timetable", and it produces a clash-free schedule on its own using a constraint solver — not just a form where an admin drags classes around and hopes for the best.
 
-### The Core Value Proposition
-> *"We are not building another timetable database. We are building an intelligent scheduling engine that actively generates, validates, and optimizes academic schedules while eliminating resource conflicts."*
+It also handles exam room allocation (including splitting a big cohort across multiple rooms when one room isn't big enough), flags conflicts if someone edits the timetable by hand afterwards, and gives you a dashboard for room utilisation and lecturer workload.
 
----
-
-## 🏗️ Architecture
-
-```text
-React Frontend (Vite + TypeScript + Tailwind CSS + Lucide Icons)
-       │
-       │ REST API (JSON / JWT)
+Architecture
+text
+React frontend (Vite + TypeScript + Tailwind)
+       │  REST API, JWT auth
        ▼
-Node.js + Express Backend (TypeScript)
-       │
-       ├── Authentication & Role Middleware (admin@iap.edu)
-       ├── Academic Management (Modules, Lecturers, Cohorts, Rooms, TimeSlots)
-       ├── Constraint-Based Timetable Engine (MRV Heuristic + Branch Pruning)
-       ├── Live Conflict Detection & Smart Suggestion Engine
-       ├── Multi-Venue Examination Allocation Engine
-       └── Analytics & Resource Utilization Engine
+Express backend (TypeScript)
+       ├── auth + role middleware
+       ├── CRUD for modules, lecturers, cohorts, rooms, time slots
+       ├── timetable engine (constraint solver)
+       ├── conflict detector + suggestion engine
+       ├── exam room allocation engine
+       └── analytics
        │
        ▼
-Prisma ORM
-       │
-       ▼
-Relational Database (SQLite embedded zero-config / PostgreSQL ready)
-```
+Prisma ORM → SQLite (works out of the box, Postgres-ready)
+How the scheduling actually works
 
----
+This is the part we spent most of our time on, so it's worth explaining properly instead of just saying "AI-powered."
 
-## 🧠 The Constraint-Based Scheduling Engine
+Hard constraints — a slot is rejected outright if it breaks any of these:
 
-The intelligence of IAP is powered by a **Constraint Satisfaction Problem (CSP)** heuristic algorithm:
+Lecturer already has a class at that time
+Cohort already has a class at that time
+Room is already booked for that time
+Room capacity is smaller than the cohort size
+Room is marked unavailable / under maintenance
+Module needs a specific room type (e.g. a lab) and this room doesn't match
+Lecturer isn't marked available for that day
 
-### 1. Hard Constraints (Enforced Strictly)
-1. **Lecturer Clash**: A lecturer cannot teach multiple classes at the same time slot.
-2. **Cohort Timetable Overlap**: A cohort of students cannot attend overlapping lectures.
-3. **Room Double-Booking**: A room/laboratory cannot host multiple sessions simultaneously.
-4. **Room Capacity Bounds**: Room capacity must be greater than or equal to the cohort's enrolled student count.
-5. **Room Availability**: Rooms under maintenance or inactive status are rejected.
-6. **Room Type Compatibility**: Modules requiring specialized facilities (e.g., `COMPUTER_LAB`) must be assigned to matching rooms.
-7. **Lecturer Availability Profile**: Sessions are only scheduled during slots where the lecturer is marked available.
+Ordering — we don't just schedule modules in whatever order they come from the database. Harder-to-place sessions go first: modules that need a specific room type, modules with big cohorts, modules taught by lecturers with limited availability. This is the standard "most constrained variable" idea from constraint satisfaction — placing the tricky ones first avoids painting yourself into a corner.
 
-### 2. Variable Ordering (Most Constrained Variable - MRV Heuristic)
-Before assignment, session requirements are sorted by difficulty:
-1. Modules with specialized room constraints (`COMPUTER_LAB` / `LECTURE_HALL`)
-2. Modules with larger cohort student counts (competing for scarce high-capacity venues)
-3. Modules taught by faculty with restricted availability profiles
-4. Multi-session modules
+Soft scoring — once a slot passes all the hard checks, it's not just accepted; it's scored against the other valid options. We reward slots that don't waste room capacity, that keep a lecturer's day compact instead of leaving gaps, that don't leave holes in a cohort's timetable, and that spread a module's multiple sessions across different days rather than stacking them.
 
-### 3. Soft Constraints & Optimization Scoring
-Valid candidates are scored based on:
-- **Optimal Room Utilization (+25 pts)**: Penalizes wasted excess capacity.
-- **Lecturer Schedule Compactness (+15 pts)**: Groups teaching sessions to reduce isolated gap hours.
-- **Cohort Gap Minimization (+15 pts)**: Avoids disjointed student schedules.
-- **Balanced Day Distribution (+15 pts)**: Spreads multi-session modules across different days.
+Every scheduled session also gets stored with a plain-English reason for why it landed where it did, and every generation run logs how many candidates it checked, how many got rejected and why, how long it took, and a quality score. That log is what powers the diagnostics you see after generating.
 
----
+Conflict detection is a separate pass from the generator — it re-reads whatever is currently in the database and checks it again. So if someone manually drags a class into a bad slot, the system catches it the same way it would if the generator itself had done it wrong.
 
-## 🚀 Getting Started & Running Locally
+Running it locally
 
-### Prerequisites
-- **Node.js**: v18+ (tested on Node v20/v22/v24)
-- **npm**: v9+
+You need Node 18+ and npm 9+.
 
-### 1. Quick Start (Run Both Backend & Frontend)
-From the project root:
+bash
+npm run install:all      # installs root, backend and frontend deps
+npm run db:push          # creates the SQLite schema
+npm run db:seed          # loads demo data (modules, lecturers, rooms, etc.)
+npm run dev               # runs backend on :5000 and frontend on :3000 together
 
-```bash
-# 1. Install dependencies for root, backend, and frontend
-npm run install:all
+Frontend: http://localhost:3000 Backend health check: http://localhost:5000/api/health
 
-# 2. Push database schema and seed demo data
-npm run db:push
-npm run db:seed
+Login
+Role	Email	Password
+Administrator	admin@iap.edu	admin123
 
-# 3. Start both backend (port 5000) and frontend (port 3000) concurrently
-npm run dev
-```
+We only implemented the admin role for this build — see the limitations section in the submission doc for what a lecturer/student view would look like.
 
-The web application will be accessible at:
-👉 **`http://localhost:3000`**
+Walking through the demo
 
-Backend API & health check:
-👉 **`http://localhost:5000/api/health`**
+This is roughly what we'll show if we get called up:
 
----
-
-## 🔑 Demo Credentials
-
-| Role | Email | Password |
-|---|---|---|
-| **Administrator** | `admin@iap.edu` | `admin123` |
-
----
-
-## 🎬 3-Minute Hackathon Demo Script for Judges
-
-1. **Dashboard Overview (`/`)**:
-   - Show populated statistics: 7 Modules, 5 Lecturers, 4 Cohorts, 5 Rooms/Labs, and the "TIMETABLE VALID (0 Conflicts)" banner.
-2. **Generate Timetable (`/timetable`)**:
-   - Click the prominent **"GENERATE TIMETABLE"** button.
-   - Observe solver metrics in the Engine Diagnostics modal: 14 requirements scheduled in ~30ms, 840 candidate evaluations, 650+ constraint violations rejected, and a 100% Quality Score.
-3. **Inspect Session Logic ("Why this assignment?")**:
-   - Click any timetable card (e.g., *CS501 Web Development*).
-   - View the detailed reasoning: verified room capacity, matched Computer Lab room type, verified faculty availability.
-4. **The "WOW" Moment — Live Conflict Detection & Smart Suggestions**:
-   - In the modal, manually change the room or time slot to create an intentional clash with another class.
-   - Click **"Apply & Validate"**.
-   - Watch the system immediately flag the conflict in red (**"Room Double-Booking / Lecturer Clash"**) and display **Smart Alternative Suggestions** (e.g., *"Move to Room 102 (Capacity 50)"*).
-5. **Multi-Venue Examination Planning (`/examinations`)**:
-   - View the examination list (e.g., Database Systems with 85 students).
-   - Click **"GENERATE EXAM SCHEDULE"**.
-   - Watch the system allocate venues based on capacity requirements.
-
----
-
-## 🧪 Automated Test Suite
-
-To run the standalone test suite verifying all 6 constraint categories:
-
-```bash
+Open the dashboard. It's already seeded with 7 modules, 5 lecturers, 4 cohorts and 5 rooms/labs, and it should say the timetable is valid with zero conflicts.
+Go to Timetable and hit Generate. Takes under a second. Open the diagnostics panel afterward — it'll show how many requirements it scheduled, how many room/slot combinations it actually checked, how many got rejected for breaking a constraint, and the overall quality score. This is the bit that shows it's actually solving something, not just filling in a template.
+Click on any class card — CS501 Web Development is a good one because it needs a computer lab — and open the "why this assignment" view. It'll show you the room capacity check, the room-type match, and the lecturer availability check that led to that placement.
+Break something on purpose. Open a session, change its room or time slot to clash with another class, and save. The system should immediately flag it as a room or lecturer conflict and offer a couple of alternative rooms/slots that would actually work. This is the part that usually gets a reaction from judges, since most scheduling tools just say "error" and leave you to figure it out yourself.
+Jump to Examinations. Pick an exam with a large cohort (Database Systems, 85 students, is a good example — it won't fit in most single rooms) and click Generate. It should split the students across two or more rooms automatically.
+Tests
+bash
 npm run test:backend
-```
 
-Tests executed:
-- `✓ Test 1: Lecturer Clash Detection`
-- `✓ Test 2: Cohort Clash Detection`
-- `✓ Test 3: Room Double Booking Detection`
-- `✓ Test 4: Room Capacity Violation Detection`
-- `✓ Test 5: Valid Timetable Verification (0 Conflicts)`
-- `✓ Test 6: Smart Suggestions for Conflict Resolution`
+This runs three suites we wrote to sanity-check the scheduling logic itself rather than just the API:
 
----
-
-## 📂 Project Structure
-
-```text
-intelligent-academic-planner/
-├── package.json               # Root scripts (install:all, dev, build)
+scheduling.test.ts — unit-level checks on time math and conflict logic (interval overlaps, duration conversion, clash detection for lecturers/rooms/cohorts)
+e2e.test.ts — spins up the actual server and hits the real API end to end (login, fetch data, generate a timetable)
+demo_verification.test.ts — checks that the specific scenarios we use in the live demo actually behave the way we say they do
+Project layout
+text
+Team-404/
 ├── backend/
 │   ├── prisma/
-│   │   ├── schema.prisma      # Relational Prisma models
-│   │   └── seed.ts            # Realistic academic demo data
+│   │   ├── schema.prisma       # data model
+│   │   └── seed.ts             # demo data
 │   ├── src/
-│   │   ├── config/            # Environment & Prisma client
-│   │   ├── controllers/       # Academic, Timetable, Exam, Analytics controllers
-│   │   ├── middleware/        # JWT auth & error handling
-│   │   ├── routes/            # REST API route tree
+│   │   ├── config/             # env + prisma client
+│   │   ├── controllers/        # academic / timetable / exam / analytics / auth
+│   │   ├── middleware/         # JWT auth, error handling
+│   │   ├── routes/             # API routes
 │   │   ├── scheduling/
-│   │   │   ├── timetableEngine.ts   # Constraint-satisfaction solver (MRV)
-│   │   │   ├── conflictDetector.ts  # Independent validation & smart suggestions
-│   │   │   ├── scoring.ts           # Soft constraint optimization heuristics
-│   │   │   └── examEngine.ts        # Multi-room exam capacity allocation
-│   │   ├── app.ts             # Express application
-│   │   └── server.ts          # Server entry point
-│   ├── tests/                 # Automated scheduling test suite
-│   └── package.json
+│   │   │   ├── timetableEngine.ts   # the CSP solver
+│   │   │   ├── conflictDetector.ts  # validation + suggestions
+│   │   │   ├── scoring.ts           # soft-constraint scoring
+│   │   │   └── examEngine.ts        # exam room allocation
+│   │   ├── app.ts
+│   │   └── server.ts
+│   └── tests/
 └── frontend/
-    ├── src/
-    │   ├── components/        # Sidebar, Navbar, StatCard, Modals, Banner
-    │   ├── pages/             # Dashboard, Timetable, Conflicts, Exams, CRUD pages
-    │   ├── services/          # Axios API client
-    │   ├── context/           # AuthContext
-    │   ├── types/             # TypeScript interfaces
-    │   ├── App.tsx            # Route configuration
-    │   └── main.tsx           # React entry point
-    ├── vite.config.ts
-    ├── tailwind.config.js
-    └── package.json
-```
+    └── src/
+        ├── components/          # Sidebar, Navbar, modals, etc.
+        ├── pages/                # Dashboard, Timetable, Conflicts, Exams, CRUD pages
+        ├── services/             # API client
+        ├── context/              # auth context
+        └── App.tsx
+What's not in here
+
+We didn't build separate lecturer or student logins, invigilator assignment, or any live college-system integration — that's all covered honestly in the submission documentation rather than pretended away. This was built in one 24-hour sprint, so we focused on making the scheduling engine actually work well rather than spreading thin across every feature in the brief.
