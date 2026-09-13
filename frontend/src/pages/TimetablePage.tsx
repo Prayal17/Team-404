@@ -242,7 +242,16 @@ export const TimetablePage: React.FC = () => {
         </div>
 
         <div className="text-xs text-slate-500 font-medium">
-          Showing {sessions.filter(s => s.status === 'SCHEDULED' && s.roomId).length} scheduled sessions
+          Showing {(() => {
+            const scheduled = sessions.filter(s => s.status === 'SCHEDULED' && s.roomId);
+            const seen = new Set<string>();
+            return scheduled.filter(s => {
+              if (!s.combinedGroupId) return true;
+              if (seen.has(s.combinedGroupId)) return false;
+              seen.add(s.combinedGroupId);
+              return true;
+            }).length;
+          })()} scheduled sessions
         </div>
       </div>
 
@@ -293,11 +302,19 @@ export const TimetablePage: React.FC = () => {
                       t => t.day === day && t.startTime === row.start && t.endTime === row.end && (row.intendedType ? t.intendedType === row.intendedType : true)
                     );
 
-                    const cellSessions = matchedSlot
+                    const rawCellSessions = matchedSlot
                       ? sessions.filter(
                           s => s.status === 'SCHEDULED' && s.timeSlotId === matchedSlot.id && s.room
                         )
                       : [];
+
+                    const seenCombinedGroups = new Set<string>();
+                    const cellSessions = rawCellSessions.filter((s) => {
+                      if (!s.combinedGroupId) return true;
+                      if (seenCombinedGroups.has(s.combinedGroupId)) return false;
+                      seenCombinedGroups.add(s.combinedGroupId);
+                      return true;
+                    });
 
                     return (
                       <td key={day} className="p-2.5 border-r border-slate-200 last:border-r-0 align-top min-h-[120px] min-w-[220px]">
@@ -340,6 +357,16 @@ export const TimetablePage: React.FC = () => {
                                 ? `${session.timeSlot.startTime}–${session.timeSlot.endTime}`
                                 : '';
 
+                              const combinedMembers = session.combinedGroupId
+                                ? sessions.filter(s => s.combinedGroupId === session.combinedGroupId)
+                                : [];
+                              const totalStudents = session.combinedGroupId
+                                ? combinedMembers.reduce((sum, m) => sum + (m.cohort?.studentCount || 0), 0)
+                                : session.cohort?.studentCount || 0;
+                              const combinedCohortNames = session.combinedGroupId
+                                ? Array.from(new Set(combinedMembers.map(s => s.cohort?.name).filter(Boolean))).join(' + ')
+                                : session.cohort?.name;
+
                               return (
                                 <div
                                   key={session.id}
@@ -372,8 +399,8 @@ export const TimetablePage: React.FC = () => {
 
                                     <div className="flex items-center justify-between gap-1 text-slate-600">
                                       {session.combinedGroupId ? (
-                                        <span className="truncate font-medium text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded text-[10px]">
-                                          Combined: {sessions.filter(s => s.combinedGroupId === session.combinedGroupId).map(s => s.cohort.name).join(' + ')}
+                                        <span className="truncate font-medium text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded text-[10px]" title={`Combined: ${combinedCohortNames} (${totalStudents} students)`}>
+                                          Combined: {combinedCohortNames} ({totalStudents}s)
                                         </span>
                                       ) : (
                                         <span className="truncate">{session.cohort.name} ({session.cohort.studentCount}s)</span>
